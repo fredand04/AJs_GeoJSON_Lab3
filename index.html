@@ -1,1 +1,175 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="utf-8">
+    <title>Uville Grub Guide</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
 
+        #map {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+
+        #side-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 400px;
+            height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: rgba(249, 249, 249, 0.95); /* Slight transparency */
+            z-index: 1;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            margin-bottom: 10px;
+        }
+
+        table {
+            border-collapse: collapse;
+            border-spacing: 0;
+            width: 100%;
+            border: 1px solid #ddd;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 16px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    </style>
+
+</head>
+<body>
+        <div id="side-panel">
+            <h2>Uville Grub Guide</h2>
+            <button>Sort by Rating</button>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Rating</th>
+                </tr>
+            </table>
+        </div>
+        <div id="map"></div>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYXdlc29tZWd1eWUiLCJhIjoiY21oOGRtbjNlMHhveDJscHV0bjF2ODd0aCJ9.meTPGOc6Dnzt2_SE0Z0JrQ';
+
+        let map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            zoom: 5.5,
+            center: [138, 38]
+        });
+
+        async function geojsonFetch() {
+            let response, grubData, boundaryData, table;
+            response = await fetch('assets/UvilleGrub.geojson');
+            grubData = await response.json();
+            response = await fetch('assets/UvilleBoundary.geojson');
+            boundaryData = await response.json();
+
+            map.on('load', function () {
+                // Add boundary layer
+                map.addSource('boundary', {
+                    type: 'geojson',
+                    data: boundaryData
+                });
+
+                map.addLayer({
+                    id: 'boundary-layer',
+                    type: 'fill',
+                    source: 'boundary',
+                    paint: {
+                        'fill-color': '#0080ff',
+                        'fill-opacity': 0.5
+                    }
+                });
+
+                // Zoom to boundary extent
+                let bounds = new mapboxgl.LngLatBounds();
+                boundaryData.features.forEach(function(feature) {
+                    let coords = feature.geometry.coordinates;
+                    if (feature.geometry.type === "Polygon") {
+                        coords[0].forEach(coord => bounds.extend(coord));
+                    } else if (feature.geometry.type === "MultiPolygon") {
+                        coords.forEach(polygon => {
+                            polygon[0].forEach(coord => bounds.extend(coord));
+                        });
+                    }
+                });
+                map.fitBounds(bounds, { padding: 20 });
+
+                // Add grub points
+                map.addSource('grub', {
+                    type: 'geojson',
+                    data: grubData
+                });
+
+                map.addLayer({
+                    id: 'grub-layer',
+                    type: 'circle',
+                    source: 'grub',
+                    paint: {
+                        'circle-radius': 6,
+                        'circle-stroke-width': 1,
+                        'circle-color': '#ff9900',
+                        'circle-stroke-color': '#333'
+                    }
+                });
+
+                // Populate table
+                table = document.getElementsByTagName("table")[0];
+                for (let i = 0; i < grubData.features.length; i++) {
+                    let row = table.insertRow(-1);
+                    let cell1 = row.insertCell(0);
+                    let cell2 = row.insertCell(1);
+                    cell1.innerHTML = grubData.features[i].properties.Name;
+                    cell2.innerHTML = grubData.features[i].properties.Rating;
+                }
+
+                // Sort functionality
+                let btn = document.getElementsByTagName("button")[0];
+                btn.addEventListener('click', sortTable);
+
+                function sortTable() {
+                    let switching = true;
+                    while (switching) {
+                        switching = false;
+                        let rows = table.rows;
+                        for (let i = 1; i < rows.length - 1; i++) {
+                            let x = parseFloat(rows[i].getElementsByTagName("td")[1].innerHTML);
+                            let y = parseFloat(rows[i + 1].getElementsByTagName("td")[1].innerHTML);
+                            if (x < y) {
+                                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                                switching = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        geojsonFetch();
+    </script>
+</body>
+</html>
